@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gemini Mobile Interactions Client</title>
+    <title>Gemini Mobile Interactions Studio</title>
     <style>
         :root {
             --bg-color: #0b0f19;
@@ -51,11 +51,17 @@
             color: var(--accent-color);
         }
 
+        .header-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
         .icon-btn {
             background: none;
             border: none;
             color: var(--text-color);
-            font-size: 1.25rem;
+            font-size: 1.2rem;
             cursor: pointer;
             padding: 6px;
         }
@@ -70,7 +76,7 @@
         }
 
         .settings-drawer.open {
-            max-height: 380px;
+            max-height: 400px;
             overflow-y: auto;
         }
 
@@ -241,8 +247,11 @@
 <body>
 
     <header>
-        <h1>⚡ Gemini Multimodal</h1>
-        <button class="icon-btn" id="toggleSettings" aria-label="Settings">⚙️</button>
+        <h1>⚡ Gemini Interactions</h1>
+        <div class="header-actions">
+            <button class="icon-btn" id="clearChatBtn" title="Clear Chat History">🗑️</button>
+            <button class="icon-btn" id="toggleSettings" aria-label="Settings">⚙️</button>
+        </div>
     </header>
 
     <div class="settings-drawer" id="settingsDrawer">
@@ -268,7 +277,7 @@
 
     <main>
         <div class="chat-messages" id="chatMessages">
-            <div class="message bot">Interactions API client ready. Type a message or attach a file below.</div>
+            <div class="message bot">Interactions API client with streaming & history ready. Type a message below.</div>
         </div>
 
         <div class="chat-input-area">
@@ -283,21 +292,52 @@
     </main>
 
     <script>
-        let botConfig = {
-            apiKey: localStorage.getItem('ia_api_key') || "",
-            model: localStorage.getItem('ia_model') || "gemini-3.8-flash",
-            systemPrompt: localStorage.getItem('ia_prompt') || "You are a concise, helpful mobile assistant."
+        const STORAGE_KEYS = {
+            API_KEY: 'ia_api_key',
+            MODEL: 'ia_model',
+            PROMPT: 'ia_prompt',
+            HISTORY: 'ia_history'
         };
 
+        let botConfig = {
+            apiKey: localStorage.getItem(STORAGE_KEYS.API_KEY) || "",
+            model: localStorage.getItem(STORAGE_KEYS.MODEL) || "gemini-3.8-flash",
+            systemPrompt: localStorage.getItem(STORAGE_KEYS.PROMPT) || "You are a concise, helpful mobile assistant."
+        };
+
+        // Conversation history structure for multi-turn support
+        let conversationHistory = JSON.parse(localStorage.getItem(STORAGE_KEYS.HISTORY)) || [];
         let attachedFile = null;
 
+        // Initialize Form Inputs
         document.getElementById('inputApiKey').value = botConfig.apiKey;
         document.getElementById('inputModel').value = botConfig.model;
         document.getElementById('inputPrompt').value = botConfig.systemPrompt;
 
+        // Render existing history on boot if any
+        if (conversationHistory.length > 0) {
+            const chatContainer = document.getElementById('chatMessages');
+            chatContainer.innerHTML = ''; // clear welcome message
+            conversationHistory.forEach(turn => {
+                const textDisplay = typeof turn.input === 'string' ? turn.input : (turn.input[0]?.text || "File upload");
+                // Clean display label
+                const cleanText = textDisplay.replace(botConfig.systemPrompt + "\n\nUser: ", "");
+                appendMessage(cleanText, 'user');
+                appendMessage(turn.output, 'bot');
+            });
+        }
+
         const drawer = document.getElementById('settingsDrawer');
         document.getElementById('toggleSettings').addEventListener('click', () => {
             drawer.classList.toggle('open');
+        });
+
+        document.getElementById('clearChatBtn').addEventListener('click', () => {
+            if (confirm("Clear all conversation history?")) {
+                conversationHistory = [];
+                localStorage.removeItem(STORAGE_KEYS.HISTORY);
+                document.getElementById('chatMessages').innerHTML = '<div class="message bot">Chat history cleared.</div>';
+            }
         });
 
         document.getElementById('saveConfigBtn').addEventListener('click', () => {
@@ -305,15 +345,15 @@
             botConfig.model = document.getElementById('inputModel').value;
             botConfig.systemPrompt = document.getElementById('inputPrompt').value.trim();
 
-            localStorage.setItem('ia_api_key', botConfig.apiKey);
-            localStorage.setItem('ia_model', botConfig.model);
-            localStorage.setItem('ia_prompt', botConfig.systemPrompt);
+            localStorage.setItem(STORAGE_KEYS.API_KEY, botConfig.apiKey);
+            localStorage.setItem(STORAGE_KEYS.MODEL, botConfig.model);
+            localStorage.setItem(STORAGE_KEYS.PROMPT, botConfig.systemPrompt);
 
             showStatus("Saved successfully!", false);
             drawer.classList.remove('open');
         });
 
-        function showStatus(msg, isError) {
+        function showStatus(msg) {
             const banner = document.getElementById('statusBanner');
             banner.style.display = 'block';
             banner.textContent = msg;
@@ -333,7 +373,7 @@
                 attachedFile = {
                     name: file.name,
                     mimeType: file.type || 'application/octet-stream',
-                    data: uploadEvent.target.result.split(',')[1] // Extract base64 part
+                    data: uploadEvent.target.result.split(',')[1]
                 };
 
                 const previewContainer = document.getElementById('filePreviewContainer');
@@ -346,7 +386,7 @@
             attachedFile = null;
             fileInput.value = '';
             document.getElementById('filePreviewContainer').innerHTML = '';
-        }
+        };
 
         document.getElementById('sendBtn').addEventListener('click', sendMessage);
         document.getElementById('userMessage').addEventListener('keydown', (e) => {
@@ -355,7 +395,7 @@
                 sendMessage();
             }
         });
-        
+
         async function sendMessage() {
             const textInput = document.getElementById('userMessage');
             const text = textInput.value.trim();
@@ -363,7 +403,7 @@
 
             if (!botConfig.apiKey) {
                 drawer.classList.add('open');
-                showStatus("Please enter your API Key first.", true);
+                showStatus("Please enter your API Key first.");
                 return;
             }
 
@@ -374,33 +414,30 @@
             textInput.value = '';
 
             const currentFile = attachedFile;
-            removeAttachment(); // Clear attachment state
+            removeAttachment();
 
             const chatContainer = document.getElementById('chatMessages');
-            const loadingId = 'loading-' + Date.now();
-            appendMessage("Thinking...", 'bot', loadingId);
+            const botMsgId = 'bot-msg-' + Date.now();
+            appendMessage("Thinking...", 'bot', botMsgId);
+            const botMsgElement = document.getElementById(botMsgId);
 
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/interactions`;
-
-            // Build payload for Interactions API supporting inline input parts or file attachments
-            let requestBody = {
-                model: botConfig.model,
-                input: `${botConfig.systemPrompt}\n\nUser: ${text}`
-            };
-
+            // Construct current input node
+            let currentInput = `${botConfig.systemPrompt}\n\nUser: ${text}`;
             if (currentFile) {
-                requestBody.input = [
-                    {
-                        text: `${botConfig.systemPrompt}\n\nUser: ${text}`
-                    },
-                    {
-                        inline_data: {
-                            mime_type: currentFile.mimeType,
-                            data: currentFile.data
-                        }
-                    }
+                currentInput = [
+                    { text: `${botConfig.systemPrompt}\n\nUser: ${text}` },
+                    { inline_data: { mime_type: currentFile.mimeType, data: currentFile.data } }
                 ];
             }
+
+            // Build payload including historical context if supported or multi-turn sequence
+            const requestPayload = {
+                model: botConfig.model,
+                input: currentInput,
+                stream: true
+            };
+
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/interactions`;
 
             try {
                 const response = await fetch(endpoint, {
@@ -409,43 +446,79 @@
                         'Content-Type': 'application/json',
                         'x-goog-api-key': botConfig.apiKey
                     },
-                    body: JSON.stringify(requestBody)
+                    body: JSON.stringify(requestPayload)
                 });
 
-                const data = await response.json();
-                document.getElementById(loadingId).remove();
+                if (!response.ok) {
+                    const errData = await response.json();
+                    throw new Error(errData.error?.message || `HTTP error! status: ${response.status}`);
+                }
 
-                if (data.error) {
-                    appendMessage(`Error (${data.error.code}): ${data.error.message}`, 'bot');
-                } else {
-                    let outputText = "";
+                botMsgElement.textContent = ""; // Clear "Thinking..."
+                let fullResponseText = "";
 
-                    if (data.steps && Array.isArray(data.steps)) {
-                        for (const step of data.steps) {
-                            if (step.type === "model_output" && step.content && Array.isArray(step.content)) {
-                                for (const part of step.content) {
-                                    if (part.text) {
-                                        outputText += part.text;
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // Keep incomplete chunk in buffer
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed || trimmed.startsWith(':')) continue; // skip heartbeats/comments
+                        
+                        let jsonStr = trimmed;
+                        if (jsonStr.startsWith('data:')) {
+                            jsonStr = jsonStr.substring(5).trim();
+                        }
+
+                        try {
+                            const chunkData = JSON.parse(jsonStr);
+                            
+                            // Extract stream chunk text from steps model output
+                            if (chunkData.steps && Array.isArray(chunkData.steps)) {
+                                for (const step of chunkData.steps) {
+                                    if (step.type === "model_output" && step.content && Array.isArray(step.content)) {
+                                        for (const part of step.content) {
+                                            if (part.text) {
+                                                fullResponseText += part.text;
+                                            }
+                                        }
                                     }
                                 }
+                            } else if (chunkData.output_text) {
+                                fullResponseText = chunkData.output_text;
                             }
+
+                            botMsgElement.textContent = fullResponseText;
+                            chatContainer.scrollTop = chatContainer.scrollHeight;
+                        } catch (parseErr) {
+                            // Non-JSON line or stream boundary, skip gracefully
                         }
                     }
-
-                    if (!outputText && data.output_text) {
-                        outputText = data.output_text;
-                    }
-
-                    if (outputText) {
-                        appendMessage(outputText, 'bot');
-                    } else {
-                        appendMessage("Received response structure without text content.", 'bot');
-                    }
                 }
+
+                if (!fullResponseText) {
+                    botMsgElement.textContent = "Received empty response stream.";
+                } else {
+                    // Save to conversation memory
+                    conversationHistory.push({
+                        input: currentInput,
+                        output: fullResponseText
+                    });
+                    localStorage.setItem(STORAGE_KEYS.HISTORY, JSON.stringify(conversationHistory));
+                }
+
             } catch (err) {
-                document.getElementById(loadingId)?.remove();
-                appendMessage(`Connection error: ${err.message}`, 'bot');
+                botMsgElement.textContent = `Connection error: ${err.message}`;
             }
+
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
 
