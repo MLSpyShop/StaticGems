@@ -2,12 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Workspace Client</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gemini Mobile Interactions Client</title>
     <style>
         :root {
-            --bg-color: #0f172a;
+            --bg-color: #0b0f19;
             --panel-bg: #1e293b;
+            --card-bg: #111827;
             --text-color: #f8fafc;
             --text-muted: #94a3b8;
             --accent-color: #3b82f6;
@@ -21,54 +22,79 @@
             margin: 0;
             padding: 0;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
             background-color: var(--bg-color);
             color: var(--text-color);
             display: flex;
+            flex-direction: column;
             height: 100vh;
+            height: 100dvh;
             overflow: hidden;
         }
 
-        sidebar {
-            width: 300px;
+        header {
             background-color: var(--panel-bg);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-        }
-
-        .brand {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 20px;
-            color: var(--accent-color);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            z-index: 10;
+        }
+
+        header h1 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--accent-color);
+        }
+
+        .icon-btn {
+            background: none;
+            border: none;
+            color: var(--text-color);
+            font-size: 1.25rem;
+            cursor: pointer;
+            padding: 6px;
+        }
+
+        .settings-drawer {
+            background-color: var(--panel-bg);
+            border-bottom: 1px solid var(--border-color);
+            padding: 16px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out;
+        }
+
+        .settings-drawer.open {
+            max-height: 380px;
+            overflow-y: auto;
         }
 
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
 
         label {
             display: block;
-            font-size: 0.85rem;
+            font-size: 0.75rem;
             color: var(--text-muted);
-            margin-bottom: 6px;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         input, select, textarea {
             width: 100%;
-            background: var(--bg-color);
+            background: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 6px;
+            border-radius: 8px;
             color: var(--text-color);
-            padding: 10px;
-            font-size: 0.9rem;
+            padding: 10px 12px;
+            font-size: 16px; 
         }
 
         input:focus, select:focus, textarea:focus {
@@ -76,19 +102,20 @@
             border-color: var(--accent-color);
         }
 
-        button {
+        .btn-primary {
             background: var(--accent-color);
             color: white;
             border: none;
-            border-radius: 6px;
-            padding: 10px 15px;
-            font-weight: 500;
+            border-radius: 8px;
+            padding: 12px;
+            font-weight: 600;
+            font-size: 0.95rem;
             cursor: pointer;
             width: 100%;
-            transition: background 0.2s;
+            text-align: center;
         }
 
-        button:hover {
+        .btn-primary:active {
             background: var(--accent-hover);
         }
 
@@ -96,31 +123,25 @@
             flex: 1;
             display: flex;
             flex-direction: column;
-            height: 100%;
-        }
-
-        .chat-header {
-            padding: 15px 25px;
-            background-color: var(--panel-bg);
-            border-bottom: 1px solid var(--border-color);
-            font-size: 1rem;
-            font-weight: 500;
+            overflow: hidden;
+            position: relative;
         }
 
         .chat-messages {
             flex: 1;
-            padding: 25px;
+            padding: 16px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 15px;
+            gap: 12px;
+            -webkit-overflow-scrolling: touch;
         }
 
         .message {
-            max-width: 75%;
-            padding: 12px 16px;
-            border-radius: 8px;
-            line-height: 1.5;
+            max-width: 85%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            line-height: 1.4;
             font-size: 0.95rem;
             word-break: break-word;
             white-space: pre-wrap;
@@ -130,136 +151,141 @@
             background-color: var(--accent-color);
             color: white;
             align-self: flex-end;
+            border-bottom-right-radius: 2px;
         }
 
         .message.bot {
             background-color: var(--panel-bg);
             border: 1px solid var(--border-color);
             align-self: flex-start;
+            border-bottom-left-radius: 2px;
         }
 
         .chat-input-area {
-            padding: 20px 25px;
+            padding: 10px 16px;
             background-color: var(--panel-bg);
             border-top: 1px solid var(--border-color);
             display: flex;
-            gap: 10px;
+            gap: 8px;
+            align-items: flex-end;
+            padding-bottom: calc(10px + env(safe-area-inset-bottom));
         }
 
         .chat-input-area textarea {
             resize: none;
-            height: 45px;
+            height: 44px;
+            max-height: 120px;
+            line-height: 1.3;
         }
 
         .chat-input-area button {
-            width: 100px;
-            height: 45px;
+            width: 60px;
+            height: 44px;
+            flex-shrink: 0;
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
         }
 
         .status-banner {
-            background: rgba(239, 68, 68, 0.1);
+            background: rgba(239, 68, 68, 0.15);
             border: 1px solid var(--error-color);
             color: #fca5a5;
-            padding: 10px;
+            padding: 8px 12px;
             border-radius: 6px;
-            font-size: 0.85rem;
-            margin-bottom: 15px;
+            font-size: 0.8rem;
+            margin-bottom: 10px;
             display: none;
         }
     </style>
 </head>
 <body>
 
-    <sidebar>
-        <div class="brand">
-            <span>⚙️ Workspace Config</span>
-        </div>
+    <header>
+        <h1>⚡ Gemini Interactions</h1>
+        <button class="icon-btn" id="toggleSettings" aria-label="Settings">⚙️</button>
+    </header>
 
+    <div class="settings-drawer" id="settingsDrawer">
         <div id="statusBanner" class="status-banner"></div>
-
         <div class="form-group">
-            <label for="inputApiKey">Gemini API Key</label>
+            <label for="inputApiKey">API Key</label>
             <input type="password" id="inputApiKey" placeholder="AIzaSy...">
         </div>
-
         <div class="form-group">
-            <label for="inputModel">Execution Model</label>
+            <label for="inputModel">Model</label>
             <select id="inputModel">
-                <option value="gemini-3.8-flash">gemini-3.8-flash (Latest Flash)</option>
-                <option value="gemini-3.1-pro">gemini-3.1-pro (Deep Reasoning)</option>
-                <option value="gemini-2.5-flash">gemini-2.5-flash (Standard Production)</option>
+                <option value="gemini-3.8-flash">gemini-3.8-flash (Latest Intelligence)</option>
+                <option value="gemini-3.7-flash">gemini-3.7-flash (Latest Workhorse)</option>
+                <option value="gemini-2.5-pro">gemini-2.5-pro (Deep Reasoning)</option>
             </select>
         </div>
-
         <div class="form-group">
             <label for="inputPrompt">System Instructions</label>
-            <textarea id="inputPrompt" rows="4">You are an expert technical assistant. Keep responses clear and accurately formatted in Markdown.</textarea>
+            <textarea id="inputPrompt" rows="2">You are a concise, helpful mobile assistant.</textarea>
         </div>
-
-        <button id="saveConfigBtn" style="margin-top: auto;">Save & Apply</button>
-    </sidebar>
+        <button class="btn-primary" id="saveConfigBtn">Save Configuration</button>
+    </div>
 
     <main>
-        <div class="chat-header" id="headerTitle">Gemini Workspace</div>
-        
         <div class="chat-messages" id="chatMessages">
-            <div class="message bot">Hello! Configure your API key on the left to start querying the Gemini runtime.</div>
+            <div class="message bot">Using Interactions API (`/v1beta/interactions`). Configure your API key to begin.</div>
         </div>
 
         <div class="chat-input-area">
-            <textarea id="userMessage" placeholder="Type your instruction or query here..."></textarea>
+            <textarea id="userMessage" placeholder="Message Gemini..."></textarea>
             <button id="sendBtn">Send</button>
         </div>
     </main>
 
     <script>
         let botConfig = {
-            apiKey: localStorage.getItem('ws_api_key') || "",
-            model: localStorage.getItem('ws_model') || "gemini-3.8-flash",
-            systemPrompt: localStorage.getItem('ws_prompt') || "You are an expert technical assistant."
+            apiKey: localStorage.getItem('ia_api_key') || "",
+            model: localStorage.getItem('ia_model') || "gemini-3.8-flash",
+            systemPrompt: localStorage.getItem('ia_prompt') || "You are a concise, helpful mobile assistant."
         };
 
         document.getElementById('inputApiKey').value = botConfig.apiKey;
         document.getElementById('inputModel').value = botConfig.model;
         document.getElementById('inputPrompt').value = botConfig.systemPrompt;
 
+        const drawer = document.getElementById('settingsDrawer');
+        document.getElementById('toggleSettings').addEventListener('click', () => {
+            drawer.classList.toggle('open');
+        });
+
         document.getElementById('saveConfigBtn').addEventListener('click', () => {
             botConfig.apiKey = document.getElementById('inputApiKey').value.trim();
             botConfig.model = document.getElementById('inputModel').value;
             botConfig.systemPrompt = document.getElementById('inputPrompt').value.trim();
 
-            localStorage.setItem('ws_api_key', botConfig.apiKey);
-            localStorage.setItem('ws_model', botConfig.model);
-            localStorage.setItem('ws_prompt', botConfig.systemPrompt);
+            localStorage.setItem('ia_api_key', botConfig.apiKey);
+            localStorage.setItem('ia_model', botConfig.model);
+            localStorage.setItem('ia_prompt', botConfig.systemPrompt);
 
-            showStatus("Configuration saved successfully!", false);
+            showStatus("Saved successfully!", false);
+            drawer.classList.remove('open');
         });
 
         function showStatus(msg, isError) {
             const banner = document.getElementById('statusBanner');
             banner.style.display = 'block';
-            banner.style.background = isError ? 'rgba(239, 68, 68, 0.1)' : 'rgba(59, 130, 246, 0.1)';
-            banner.style.borderColor = isError ? 'var(--error-color)' : 'var(--accent-color)';
-            banner.style.color = isError ? '#fca5a5' : '#93c5fd';
             banner.textContent = msg;
-            setTimeout(() => { banner.style.display = 'none'; }, 4000);
+            setTimeout(() => { banner.style.display = 'none'; }, 3000);
         }
 
         document.getElementById('sendBtn').addEventListener('click', sendMessage);
-        document.getElementById('userMessage').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
-            }
-        });
-
+        
         async function sendMessage() {
             const textInput = document.getElementById('userMessage');
             const text = textInput.value.trim();
             if (!text) return;
 
             if (!botConfig.apiKey) {
-                showStatus("Please enter and save a valid Gemini API Key first.", true);
+                drawer.classList.add('open');
+                showStatus("Please enter your API Key first.", true);
                 return;
             }
 
@@ -270,8 +296,8 @@
             const loadingId = 'loading-' + Date.now();
             appendMessage("Thinking...", 'bot', loadingId);
 
-            // Active REST endpoint schema for generateContent
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${botConfig.model}:generateContent`;
+            // Active Interactions API Endpoint Structure
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/interactions`;
 
             try {
                 const response = await fetch(endpoint, {
@@ -281,9 +307,8 @@
                         'x-goog-api-key': botConfig.apiKey
                     },
                     body: JSON.stringify({
-                        contents: [
-                            { role: "user", parts: [{ text: `${botConfig.systemPrompt}\n\nUser Request: ${text}` }] }
-                        ]
+                        model: botConfig.model,
+                        input: `${botConfig.systemPrompt}\n\nUser: ${text}`
                     })
                 });
 
@@ -291,16 +316,15 @@
                 document.getElementById(loadingId).remove();
 
                 if (data.error) {
-                    appendMessage(`API Error (${data.error.code}): ${data.error.message}`, 'bot');
-                } else if (data.candidates && data.candidates[0].content) {
-                    const reply = data.candidates[0].content.parts[0].text;
-                    appendMessage(reply, 'bot');
+                    appendMessage(`Error (${data.error.code}): ${data.error.message}`, 'bot');
+                } else if (data.output_text) {
+                    appendMessage(data.output_text, 'bot');
                 } else {
-                    appendMessage("Received unexpected response payload: " + JSON.stringify(data), 'bot');
+                    appendMessage("Received response: " + JSON.stringify(data), 'bot');
                 }
             } catch (err) {
                 document.getElementById(loadingId)?.remove();
-                appendMessage(`Connection Blocked: ${err.message}. (Ensure you are serving this file via a local development server or extension if direct browser security blocks requests).`, 'bot');
+                appendMessage(`Connection error: ${err.message}`, 'bot');
             }
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
