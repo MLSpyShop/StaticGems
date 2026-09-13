@@ -277,6 +277,12 @@
         }
 
         document.getElementById('sendBtn').addEventListener('click', sendMessage);
+        document.getElementById('userMessage').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
         
         async function sendMessage() {
             const textInput = document.getElementById('userMessage');
@@ -296,7 +302,6 @@
             const loadingId = 'loading-' + Date.now();
             appendMessage("Thinking...", 'bot', loadingId);
 
-            // Active Interactions API Endpoint Structure
             const endpoint = `https://generativelanguage.googleapis.com/v1beta/interactions`;
 
             try {
@@ -317,10 +322,24 @@
 
                 if (data.error) {
                     appendMessage(`Error (${data.error.code}): ${data.error.message}`, 'bot');
-                } else if (data.output_text) {
-                    appendMessage(data.output_text, 'bot');
                 } else {
-                    appendMessage("Received response: " + JSON.stringify(data), 'bot');
+                    let outputText = data.output_text || "";
+                    
+                    if (!outputText && data.steps && Array.isArray(data.steps)) {
+                        for (const step of data.steps) {
+                            if (step.content && Array.isArray(step.content)) {
+                                for (const part of step.content) {
+                                    if (part.text) outputText += part.text;
+                                }
+                            }
+                        }
+                    }
+
+                    if (outputText) {
+                        appendMessage(outputText, 'bot');
+                    } else {
+                        appendMessage("Received empty output structure.", 'bot');
+                    }
                 }
             } catch (err) {
                 document.getElementById(loadingId)?.remove();
