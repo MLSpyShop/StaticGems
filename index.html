@@ -161,14 +161,31 @@
             border-bottom-left-radius: 2px;
         }
 
+        .attachment-preview {
+            font-size: 0.75rem;
+            background: rgba(0,0,0,0.2);
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-bottom: 6px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
         .chat-input-area {
             padding: 10px 16px;
             background-color: var(--panel-bg);
             border-top: 1px solid var(--border-color);
             display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-bottom: calc(10px + env(safe-area-inset-bottom));
+        }
+
+        .input-row {
+            display: flex;
             gap: 8px;
             align-items: flex-end;
-            padding-bottom: calc(10px + env(safe-area-inset-bottom));
         }
 
         .chat-input-area textarea {
@@ -176,9 +193,25 @@
             height: 44px;
             max-height: 120px;
             line-height: 1.3;
+            flex: 1;
         }
 
-        .chat-input-area button {
+        .icon-action-btn {
+            width: 44px;
+            height: 44px;
+            flex-shrink: 0;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .chat-input-area button.send-btn {
             width: 60px;
             height: 44px;
             flex-shrink: 0;
@@ -199,12 +232,16 @@
             margin-bottom: 10px;
             display: none;
         }
+
+        #fileInput {
+            display: none;
+        }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>⚡ Gemini Interactions</h1>
+        <h1>⚡ Gemini Multimodal</h1>
         <button class="icon-btn" id="toggleSettings" aria-label="Settings">⚙️</button>
     </header>
 
@@ -231,12 +268,17 @@
 
     <main>
         <div class="chat-messages" id="chatMessages">
-            <div class="message bot">Using Interactions API (`/v1beta/interactions`). Configure your API key to begin.</div>
+            <div class="message bot">Interactions API client ready. Type a message or attach a file below.</div>
         </div>
 
         <div class="chat-input-area">
-            <textarea id="userMessage" placeholder="Message Gemini..."></textarea>
-            <button id="sendBtn">Send</button>
+            <div id="filePreviewContainer"></div>
+            <div class="input-row">
+                <input type="file" id="fileInput">
+                <button class="icon-action-btn" id="attachBtn" title="Attach File">📎</button>
+                <textarea id="userMessage" placeholder="Message Gemini..."></textarea>
+                <button class="send-btn" id="sendBtn">Send</button>
+            </div>
         </div>
     </main>
 
@@ -246,6 +288,8 @@
             model: localStorage.getItem('ia_model') || "gemini-3.8-flash",
             systemPrompt: localStorage.getItem('ia_prompt') || "You are a concise, helpful mobile assistant."
         };
+
+        let attachedFile = null;
 
         document.getElementById('inputApiKey').value = botConfig.apiKey;
         document.getElementById('inputModel').value = botConfig.model;
@@ -276,6 +320,34 @@
             setTimeout(() => { banner.style.display = 'none'; }, 3000);
         }
 
+        // File attachment handling
+        const fileInput = document.getElementById('fileInput');
+        document.getElementById('attachBtn').addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(uploadEvent) {
+                attachedFile = {
+                    name: file.name,
+                    mimeType: file.type || 'application/octet-stream',
+                    data: uploadEvent.target.result.split(',')[1] // Extract base64 part
+                };
+
+                const previewContainer = document.getElementById('filePreviewContainer');
+                previewContainer.innerHTML = `<div class="attachment-preview">📎 Attached: ${file.name} <span style="cursor:pointer; margin-left:6px;" onclick="removeAttachment()">❌</span></div>`;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        window.removeAttachment = function() {
+            attachedFile = null;
+            fileInput.value = '';
+            document.getElementById('filePreviewContainer').innerHTML = '';
+        }
+
         document.getElementById('sendBtn').addEventListener('click', sendMessage);
         document.getElementById('userMessage').addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -287,7 +359,7 @@
         async function sendMessage() {
             const textInput = document.getElementById('userMessage');
             const text = textInput.value.trim();
-            if (!text) return;
+            if (!text && !attachedFile) return;
 
             if (!botConfig.apiKey) {
                 drawer.classList.add('open');
@@ -295,14 +367,40 @@
                 return;
             }
 
-            appendMessage(text, 'user');
+            let displayMsg = text;
+            if (attachedFile) displayMsg += `\n[Attached File: ${attachedFile.name}]`;
+
+            appendMessage(displayMsg, 'user');
             textInput.value = '';
+
+            const currentFile = attachedFile;
+            removeAttachment(); // Clear attachment state
 
             const chatContainer = document.getElementById('chatMessages');
             const loadingId = 'loading-' + Date.now();
             appendMessage("Thinking...", 'bot', loadingId);
 
             const endpoint = `https://generativelanguage.googleapis.com/v1beta/interactions`;
+
+            // Build payload for Interactions API supporting inline input parts or file attachments
+            let requestBody = {
+                model: botConfig.model,
+                input: `${botConfig.systemPrompt}\n\nUser: ${text}`
+            };
+
+            if (currentFile) {
+                requestBody.input = [
+                    {
+                        text: `${botConfig.systemPrompt}\n\nUser: ${text}`
+                    },
+                    {
+                        inline_data: {
+                            mime_type: currentFile.mimeType,
+                            data: currentFile.data
+                        }
+                    }
+                ];
+            }
 
             try {
                 const response = await fetch(endpoint, {
@@ -311,10 +409,7 @@
                         'Content-Type': 'application/json',
                         'x-goog-api-key': botConfig.apiKey
                     },
-                    body: JSON.stringify({
-                        model: botConfig.model,
-                        input: `${botConfig.systemPrompt}\n\nUser: ${text}`
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 const data = await response.json();
@@ -323,22 +418,28 @@
                 if (data.error) {
                     appendMessage(`Error (${data.error.code}): ${data.error.message}`, 'bot');
                 } else {
-                    let outputText = data.output_text || "";
-                    
-                    if (!outputText && data.steps && Array.isArray(data.steps)) {
+                    let outputText = "";
+
+                    if (data.steps && Array.isArray(data.steps)) {
                         for (const step of data.steps) {
-                            if (step.content && Array.isArray(step.content)) {
+                            if (step.type === "model_output" && step.content && Array.isArray(step.content)) {
                                 for (const part of step.content) {
-                                    if (part.text) outputText += part.text;
+                                    if (part.text) {
+                                        outputText += part.text;
+                                    }
                                 }
                             }
                         }
                     }
 
+                    if (!outputText && data.output_text) {
+                        outputText = data.output_text;
+                    }
+
                     if (outputText) {
                         appendMessage(outputText, 'bot');
                     } else {
-                        appendMessage("Received empty output structure.", 'bot');
+                        appendMessage("Received response structure without text content.", 'bot');
                     }
                 }
             } catch (err) {
