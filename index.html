@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Workspace Client (Interactions API)</title>
+    <title>Gemini Workspace Client</title>
     <style>
         :root {
             --bg-color: #0f172a;
@@ -200,7 +200,7 @@
     </sidebar>
 
     <main>
-        <div class="chat-header" id="headerTitle">Gemini Workspace (Interactions API)</div>
+        <div class="chat-header" id="headerTitle">Gemini Workspace</div>
         
         <div class="chat-messages" id="chatMessages">
             <div class="message bot">Hello! Configure your API key on the left to start querying the Gemini runtime.</div>
@@ -270,8 +270,8 @@
             const loadingId = 'loading-' + Date.now();
             appendMessage("Thinking...", 'bot', loadingId);
 
-            // Updated active endpoint structure using Interactions API format
-            const endpoint = `https://generativelanguage.googleapis.com/v1beta/interactions`;
+            // Active REST endpoint schema for generateContent
+            const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${botConfig.model}:generateContent`;
 
             try {
                 const response = await fetch(endpoint, {
@@ -281,8 +281,9 @@
                         'x-goog-api-key': botConfig.apiKey
                     },
                     body: JSON.stringify({
-                        model: botConfig.model,
-                        input: `${botConfig.systemPrompt}\n\nUser Request: ${text}`
+                        contents: [
+                            { role: "user", parts: [{ text: `${botConfig.systemPrompt}\n\nUser Request: ${text}` }] }
+                        ]
                     })
                 });
 
@@ -291,18 +292,15 @@
 
                 if (data.error) {
                     appendMessage(`API Error (${data.error.code}): ${data.error.message}`, 'bot');
-                } else if (data.output_text) {
-                    appendMessage(data.output_text, 'bot');
                 } else if (data.candidates && data.candidates[0].content) {
-                    // Fallback parse safety if legacy schema responds
                     const reply = data.candidates[0].content.parts[0].text;
                     appendMessage(reply, 'bot');
                 } else {
-                    appendMessage("Received response payload: " + JSON.stringify(data), 'bot');
+                    appendMessage("Received unexpected response payload: " + JSON.stringify(data), 'bot');
                 }
             } catch (err) {
                 document.getElementById(loadingId)?.remove();
-                appendMessage(`Network or CORS Block Detected: ${err.message}. (Note: Direct browser execution to Google endpoints requires a local server or extension backend to circumvent CORS restrictions).`, 'bot');
+                appendMessage(`Connection Blocked: ${err.message}. (Ensure you are serving this file via a local development server or extension if direct browser security blocks requests).`, 'bot');
             }
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
